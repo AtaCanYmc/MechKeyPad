@@ -1,94 +1,95 @@
+// -----------------------------------------------------------------------------
+// MechKeyPad.ino
+//
+// Main application file for the MechMacroPad.
+// This file is responsible for:
+// - Initializing hardware (OLED display, buttons).
+// - Creating an instance of the MechMacro logic class.
+// - Running the main loop to read button presses and update the display.
+// -----------------------------------------------------------------------------
+
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "MechMacro.h"
+#include "MechMacro.h" // Include our custom macro logic class
 
+// --- Pin and Hardware Definitions ---
 #define SENSOR_PIN A0
-#define MOTOR_PIN 5
-
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
 #define OLED_RESET    -1
 #define SCREEN_ADDRESS 0x3C
 
-#define CONTROL_TIME 1000
-
+// --- Global Objects ---
+// Create an instance of the OLED display
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-int now = 0;
-int readKey = 0;
+// Create an instance of our MechMacro class, selecting WINDOWS as the OS.
+// You can change this to MAC if you are on a macOS.
+MechMacro macroPad(WINDOWS);
 
+// --- State Variables ---
+int lastAnalogValue = -1; // Stores the last read analog value to detect changes
 
+// -----------------------------------------------------------------------------
+// SETUP: Runs once when the Arduino starts up.
+// -----------------------------------------------------------------------------
 void setup() {
   Serial.begin(9600);
-  pinMode(MOTOR_PIN, OUTPUT);
-  startOLED();
+  initializeOLED();
+  updateDisplay(); // Initial display update
 }
 
+// -----------------------------------------------------------------------------
+// LOOP: Runs continuously after setup().
+// -----------------------------------------------------------------------------
 void loop() {
+  // Read the current analog value from the buttons
+  int currentAnalogValue = analogRead(SENSOR_PIN);
 
-}
+  // Check if the button state has changed (pressed or released)
+  if (currentAnalogValue != lastAnalogValue) {
+    // A button has been pressed. Let the MechMacro class handle it.
+    // The class contains all the logic for debouncing and executing actions.
+    macroPad.handleButtonPress(currentAnalogValue);
 
-int getKeyIndex() {
-  int keyValue = analogRead(SENSOR_PIN);
-  switch(keyValue) {
-    case 614:
-      hapticFeedback(512);
-      return 1;
-    case 819:
-      hapticFeedback(512);
-      return 2;
-    case 1023:
-      hapticFeedback(512);
-      return 3;
-    case 408:
-      hapticFeedback(512);
-      return 4;
-    case 203:
-      hapticFeedback(512);
-      return 5;
-    case 0:
-      hapticFeedback(512);
-      return 6;
-    default:
-      hapticFeedback(0);
-      return 0;
+    // After handling the press, update the display with the new state
+    updateDisplay();
+    
+    // Update the last known value
+    lastAnalogValue = currentAnalogValue;
   }
+  
+  // Also, let the MechMacro class handle any time-based tasks, like the clicker mode.
+  macroPad.updateClickerMode();
 }
 
-void hapticFeedback(int value) {
-  int motorPower = map(value, 0, 1023, 0, 255); 
-  analogWrite(MOTOR_PIN, motorPower);
-}
+// --- Helper Functions ---
 
-void startOLED() {
+/**
+ * @brief Initializes the OLED display.
+ */
+void initializeOLED() {
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println("[OLED] - SSD1306 OLED başlatılamadı!");
-  } else {
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
+    Serial.println(F("[OLED] - SSD1306 allocation failed"));
+    for (;;); // Don't proceed, loop forever
   }
-}
-
-void writeText(int x, int y, int font, String text, int color) {
-  display.setCursor(x, y);
-  display.setTextSize(font);
-  display.setTextColor(color);
-  display.print(text);
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
   display.display();
 }
 
-void writeText(int x, int y, int font, String text) {
-  writeText(x, y, font, text, SSD1306_WHITE);
-}
-
-void writeText(int x, int y, String text) {
-  writeText(x, y, 1, text);
-}
-
-void checkButtons() {
-  readKey = getKeyIndex();
-  if (now + CONTROL_TIME < millis()) {
-    now = millis();
-  }
+/**
+ * @brief Clears the display and shows the current menu name.
+ * It gets the menu name from our macroPad object.
+ */
+void updateDisplay() {
+  display.clearDisplay();
+  display.setTextSize(2); // Use a larger font for the menu title
+  display.setCursor(0, 8);
+  
+  // Get the current menu name from the MechMacro object and print it
+  display.print(macroPad.getCurrentMenuName());
+  
+  display.display();
 }
